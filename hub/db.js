@@ -181,6 +181,12 @@ CREATE INDEX IF NOT EXISTS idx_changes_entity ON changes (entity_type, entity_id
 `);
   // migrate older SQLite DBs that predate the timezone column (Postgres starts fresh)
   try { await driver.exec('ALTER TABLE ad_accounts ADD COLUMN timezone TEXT'); } catch { /* already present */ }
+  // `raw` holds the complete Facebook object for each node, so we keep every field the
+  // Graph returns even when there is no dedicated column for it (tax id, billing address,
+  // created_time, funding details, extended credit, Instagram, system users, …).
+  for (const tbl of ['ad_accounts', 'businesses', 'pages', 'pixels', 'people']) {
+    try { await driver.exec(`ALTER TABLE ${tbl} ADD COLUMN raw TEXT`); } catch { /* already present */ }
+  }
 
   return { kind: driver.kind, path: DB_PATH };
 }
@@ -192,29 +198,32 @@ const SQL = {
     ON CONFLICT(fb_user_id) DO UPDATE SET name=excluded.name,
       source_label=COALESCE(excluded.source_label,profiles.source_label),
       last_synced_at=excluded.last_synced_at`,
-  business: `INSERT INTO businesses (bm_id,name,verification_status,last_synced_at)
-    VALUES (?,?,?,?)
+  business: `INSERT INTO businesses (bm_id,name,verification_status,last_synced_at,raw)
+    VALUES (?,?,?,?,?)
     ON CONFLICT(bm_id) DO UPDATE SET name=COALESCE(excluded.name,businesses.name),
       verification_status=COALESCE(excluded.verification_status,businesses.verification_status),
-      last_synced_at=excluded.last_synced_at`,
+      last_synced_at=excluded.last_synced_at, raw=COALESCE(excluded.raw,businesses.raw)`,
   adAccount: `INSERT INTO ad_accounts
-    (account_id,name,account_status,disable_reason,balance,amount_spent,spend_cap,currency,timezone,funding,last_synced_at)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?)
+    (account_id,name,account_status,disable_reason,balance,amount_spent,spend_cap,currency,timezone,funding,last_synced_at,raw)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
     ON CONFLICT(account_id) DO UPDATE SET name=excluded.name,account_status=excluded.account_status,
       disable_reason=excluded.disable_reason,balance=excluded.balance,amount_spent=excluded.amount_spent,
       spend_cap=COALESCE(excluded.spend_cap,ad_accounts.spend_cap),currency=excluded.currency,
       timezone=COALESCE(excluded.timezone,ad_accounts.timezone),
-      funding=COALESCE(excluded.funding,ad_accounts.funding),last_synced_at=excluded.last_synced_at`,
-  page: `INSERT INTO pages (page_id,name,verification_status,last_synced_at)
-    VALUES (?,?,?,?)
+      funding=COALESCE(excluded.funding,ad_accounts.funding),last_synced_at=excluded.last_synced_at,
+      raw=COALESCE(excluded.raw,ad_accounts.raw)`,
+  page: `INSERT INTO pages (page_id,name,verification_status,last_synced_at,raw)
+    VALUES (?,?,?,?,?)
     ON CONFLICT(page_id) DO UPDATE SET name=excluded.name,
       verification_status=COALESCE(excluded.verification_status,pages.verification_status),
-      last_synced_at=excluded.last_synced_at`,
-  pixel: `INSERT INTO pixels (pixel_id,name,last_synced_at) VALUES (?,?,?)
-    ON CONFLICT(pixel_id) DO UPDATE SET name=excluded.name, last_synced_at=excluded.last_synced_at`,
-  person: `INSERT INTO people (person_id,name,email,last_synced_at) VALUES (?,?,?,?)
+      last_synced_at=excluded.last_synced_at, raw=COALESCE(excluded.raw,pages.raw)`,
+  pixel: `INSERT INTO pixels (pixel_id,name,last_synced_at,raw) VALUES (?,?,?,?)
+    ON CONFLICT(pixel_id) DO UPDATE SET name=excluded.name, last_synced_at=excluded.last_synced_at,
+      raw=COALESCE(excluded.raw,pixels.raw)`,
+  person: `INSERT INTO people (person_id,name,email,last_synced_at,raw) VALUES (?,?,?,?,?)
     ON CONFLICT(person_id) DO UPDATE SET name=COALESCE(excluded.name,people.name),
-      email=COALESCE(excluded.email,people.email), last_synced_at=excluded.last_synced_at`,
+      email=COALESCE(excluded.email,people.email), last_synced_at=excluded.last_synced_at,
+      raw=COALESCE(excluded.raw,people.raw)`,
   edge: `INSERT INTO edges (src_type,src_id,dst_type,dst_id,relation,role,pending,last_synced_at)
     VALUES (?,?,?,?,?,?,?,?)
     ON CONFLICT(src_type,src_id,dst_type,dst_id,relation) DO UPDATE SET
@@ -234,6 +243,14 @@ const SQL = {
 // extractor passes FB errors through). Tolerate that everywhere.
 const asList = (v) => (Array.isArray(v) ? v : []);
 const errOf = (v) => (v && !Array.isArray(v) && v.error ? v.error : null);
+// business node fields to keep in `raw`, minus the big nested asset arrays (which each
+// become their own rows). Keeps created_time, vertical, extended_credits, system_users,
+// instagram_accounts, primary_page, two_factor_type, etc.
+const bmRaw = (bm) => {
+  const { owned_ad_accounts, client_ad_accounts, owned_pages, client_pages, adspixels,
+    business_users, pending_users, ...rest } = bm;
+  return JSON.stringify(rest);
+};
 
 const AD_STATUS_LABEL = { 1:'Active',2:'Disabled',3:'Unsettled',7:'Pending review',8:'Pending settlement',
   9:'Grace period',100:'Pending closure',101:'Closed',201:'Active',202:'Closed' };
@@ -283,7 +300,7 @@ async function ingest(dump, opts = {}) {
       await t.run(SQL.adAccount, [id, a.name || null, a.account_status ?? null, a.disable_reason ?? null,
         a.balance ?? null, a.amount_spent ?? null, a.adtrust_dsl ?? a.spend_cap ?? null, a.currency ?? null,
         a.timezone_name ?? a.timezone ?? null,
-        a.funding_source_details ? JSON.stringify(a.funding_source_details) : null, fetchedAt]);
+        a.funding_source_details ? JSON.stringify(a.funding_source_details) : null, fetchedAt, JSON.stringify(a)]);
       if (!seen.acct.has(id)) {
         seen.acct.add(id); counts.ad_accounts++;
         if (!prev) await change('added', 'ad_account', id, a.name);
@@ -298,26 +315,26 @@ async function ingest(dump, opts = {}) {
     const upsertPage = async (p) => {
       if (!p || !p.id) return null;
       const prev = await t.get('SELECT 1 FROM pages WHERE page_id=?', [p.id]);
-      await t.run(SQL.page, [p.id, p.name || null, p.verification_status || null, fetchedAt]);
+      await t.run(SQL.page, [p.id, p.name || null, p.verification_status || null, fetchedAt, JSON.stringify(p)]);
       if (!seen.page.has(p.id)) { seen.page.add(p.id); counts.pages++; if (!prev) await change('added','page',p.id,p.name); }
       return p.id;
     };
     const upsertPixel = async (px) => {
       if (!px || !px.id) return null;
       const prev = await t.get('SELECT 1 FROM pixels WHERE pixel_id=?', [px.id]);
-      await t.run(SQL.pixel, [px.id, px.name || null, fetchedAt]);
+      await t.run(SQL.pixel, [px.id, px.name || null, fetchedAt, JSON.stringify(px)]);
       if (!seen.pixel.has(px.id)) { seen.pixel.add(px.id); counts.pixels++; if (!prev) await change('added','pixel',px.id,px.name); }
       // pixel shared into ad accounts (pixel -> ad_account edge)
       for (const sa of asList(px.shared_accounts || px.assigned_accounts)) {
         const aid = acctId(sa); if (!aid) continue;
-        if (sa && sa.name) await t.run(SQL.adAccount, [aid, sa.name, null,null,null,null,null, sa.currency||null, null,null, fetchedAt]);
+        if (sa && sa.name) await t.run(SQL.adAccount, [aid, sa.name, null,null,null,null,null, sa.currency||null, null,null, fetchedAt, null]);
         await t.run(SQL.edge, ['pixel', px.id, 'ad_account', aid, 'shared', null, 0, fetchedAt]); counts.edges++;
       }
       return px.id;
     };
     const addAccess = async (bm, u, pending) => {
       if (!u || !u.id) return;
-      await t.run(SQL.person, [u.id, u.name || null, u.email || null, fetchedAt]);
+      await t.run(SQL.person, [u.id, u.name || null, u.email || null, fetchedAt, JSON.stringify(u)]);
       if (!seen.person.has(u.id)) { seen.person.add(u.id); counts.people++; }
       const isNew = await edgeIsNew('business', bm.id, 'person', u.id, 'access');
       await t.run(SQL.edge, ['business', bm.id, 'person', u.id, 'access', u.role || null, pending, fetchedAt]); counts.edges++;
@@ -327,7 +344,7 @@ async function ingest(dump, opts = {}) {
     for (const bm of asList(dump.businesses)) {
       if (!bm || !bm.id) continue;
       const prevBm = await t.get('SELECT 1 FROM businesses WHERE bm_id=?', [bm.id]);
-      await t.run(SQL.business, [bm.id, bm.name || null, bm.verification_status || null, fetchedAt]);
+      await t.run(SQL.business, [bm.id, bm.name || null, bm.verification_status || null, fetchedAt, bmRaw(bm)]);
       if (!seen.bm.has(bm.id)) { seen.bm.add(bm.id); counts.businesses++; if (!prevBm) await change('added','business',bm.id,bm.name); }
       await t.run(SQL.edge, ['profile', pid, 'business', bm.id, 'member', null, 0, fetchedAt]); counts.edges++;
 
@@ -353,7 +370,7 @@ async function ingest(dump, opts = {}) {
       `SELECT DISTINCT src_id FROM edges WHERE dst_type=? AND dst_id=? AND src_type='business'`, [t2, xid])).map((r) => r.src_id);
     const linkProfileAsset = async (t2, xid, biz) => {
       if (biz && biz.id) {
-        await t.run(SQL.business, [biz.id, biz.name || null, null, fetchedAt]);
+        await t.run(SQL.business, [biz.id, biz.name || null, null, fetchedAt, null]);
         if (!seen.bm.has(biz.id)) { seen.bm.add(biz.id); if (!(await t.get('SELECT 1 FROM businesses WHERE bm_id=?', [biz.id]))) counts.businesses++; }
         await t.run(SQL.edge, ['business', biz.id, t2, xid, 'owns', null, 0, fetchedAt]); counts.edges++;
       }

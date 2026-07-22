@@ -27,6 +27,8 @@
 
   <div class="row"><input type="checkbox" id="autoSend" /><label for="autoSend" style="margin:0">Auto-send to hub after each extract</label></div>
   <div class="row"><input type="checkbox" id="autoRun" /><label for="autoRun" style="margin:0">Auto-run when a Facebook tab opens</label></div>
+  <div class="row"><input type="checkbox" id="deepScan" /><label for="deepScan" style="margin:0">Deep scan (fetch tax id, billing address & credit per account)</label></div>
+  <div class="hint">Pulls the permission-sensitive account fields with one extra Graph call per owned account. Turn off if Facebook rate-limits you on very large orgs.</div>
 
   <label for="autoRunEveryMin">Auto-run throttle (minutes)</label>
   <input type="text" id="autoRunEveryMin" placeholder="10" style="max-width:120px" />

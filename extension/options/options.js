@@ -1,5 +1,5 @@
 'use strict';
-const DEFAULTS = { hubUrl: 'http://127.0.0.1:5051/api/ingest', sourceLabel: '', autoSend: true, autoRun: true, autoRunEveryMin: 10 };
+const DEFAULTS = { hubUrl: 'http://127.0.0.1:5051/api/ingest', sourceLabel: '', autoSend: true, autoRun: true, autoRunEveryMin: 10, deepScan: true };
 const $ = (s) => document.querySelector(s);
 
 async function load() {
@@ -8,6 +8,7 @@ async function load() {
   $('#sourceLabel').value = c.sourceLabel;
   $('#autoSend').checked = !!c.autoSend;
   $('#autoRun').checked = !!c.autoRun;
+  $('#deepScan').checked = !!c.deepScan;
   $('#autoRunEveryMin').value = c.autoRunEveryMin;
 }
 
@@ -17,6 +18,7 @@ $('#save').addEventListener('click', async () => {
     sourceLabel: $('#sourceLabel').value.trim(),
     autoSend: $('#autoSend').checked,
     autoRun: $('#autoRun').checked,
+    deepScan: $('#deepScan').checked,
     autoRunEveryMin: Math.max(1, Number($('#autoRunEveryMin').value) || 10),
   };
   await chrome.storage.local.set(cfg);

@@ -160,6 +160,7 @@ main{max-width:1560px;padding:22px 44px 90px}
 a.mstat{display:block;text-decoration:none;color:inherit;transition:border-color .1s,transform .1s}
 a.mstat.click{cursor:pointer}
 a.mstat.click:hover{border-color:var(--lineHover);transform:translateY(-2px)}
+pre.rawjson{margin:0;padding:14px 16px;font-size:12px;line-height:1.5;color:var(--secondaryFg);overflow-x:auto;white-space:pre;max-height:420px;overflow-y:auto}
 
 .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-bottom:18px;align-items:start}
 @media(max-width:1200px){.grid3{grid-template-columns:repeat(2,1fr)}}

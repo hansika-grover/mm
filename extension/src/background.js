@@ -6,7 +6,7 @@
 'use strict';
 
 const DEFAULTS = { hubUrl: 'http://127.0.0.1:5051/api/ingest', sourceLabel: '', autoSend: true,
-  autoRun: true, autoRunEveryMin: 10, graphVersion: 'v19.0' };
+  autoRun: true, autoRunEveryMin: 10, graphVersion: 'v19.0', deepScan: true };
 const cfg = async () => ({ ...DEFAULTS, ...(await chrome.storage.local.get(DEFAULTS)) });
 const statusUrl = (hubUrl) => hubUrl.replace(/\/api\/ingest\/?$/, '/api/session-status');
 
@@ -31,40 +31,75 @@ function makeGraph(token, V) {
   };
 }
 
-const ACCT_FIELDS = 'account_id,name,account_status,disable_reason,balance,amount_spent,adtrust_dsl,spend_cap,currency,timezone_name,funding_source_details';
-const CLIENT_ACCT_FIELDS = 'account_id,name,account_status,disable_reason,balance,amount_spent,currency,timezone_name';
+// Field sets are kept generous. Per-edge errors are tolerated (the hub's errOf), and the
+// permission-sensitive account fields are pulled in a separate per-account pass so a
+// failure there never drops the whole account list — only that enrichment is lost.
+const ACCT_FIELDS = 'account_id,name,account_status,disable_reason,balance,amount_spent,adtrust_dsl,spend_cap,currency,timezone_name,timezone_offset_hours_utc,created_time,business_country_code,business_name,funding_source,funding_source_details,is_prepay_account,is_personal';
+const CLIENT_ACCT_FIELDS = 'account_id,name,account_status,disable_reason,balance,amount_spent,currency,timezone_name,created_time,business_country_code';
+const ACCT_DEEP_FIELDS = 'tax_id,tax_id_status,tax_id_type,business_city,business_state,business_street,business_street2,business_zip,min_daily_budget,min_campaign_group_spend_cap,owner,extended_credit_invoice_group';
+const PAGE_FIELDS = 'id,name,verification_status,category,link,is_published,tasks';
+const CLIENT_PAGE_FIELDS = 'id,name,category,link';
+const PIXEL_FIELDS = 'id,name,last_fired_time,is_unavailable,data_use_setting,enable_automatic_matching_for_ads,first_party_cookie_status,owner_business';
+const BM_FIELDS = 'id,name,verification_status,created_time,primary_page,vertical,two_factor_type,timezone_id,business_type,is_hidden';
+
+// run an async fn over items with bounded concurrency (keeps FB rate limits happy)
+async function mapLimit(items, limit, fn) {
+  const out = []; let idx = 0;
+  const workers = Array.from({ length: Math.min(limit, items.length || 0) }, async () => {
+    while (idx < items.length) { const i = idx++; out[i] = await fn(items[i], i); }
+  });
+  await Promise.all(workers);
+  return out;
+}
 
 async function walk(session, conf, onProg = () => {}) {
   const g = makeGraph(session.token, conf.graphVersion);
+  const deep = conf.deepScan !== false;
   onProg('Reading your profile', 4);
   const me = await g('me', 'id,name');
   if (me.error) throw new Error('token rejected by Facebook: ' + me.error);
   onProg('Listing Business Managers', 8);
-  const bms = await g('me/businesses', 'id,name,verification_status');
+  const bms = await g('me/businesses', BM_FIELDS);
   if (bms.error) throw new Error('could not list businesses: ' + bms.error);
 
   const out = { me: { id: me.id, name: me.name }, fetchedAt: new Date().toISOString(),
     sourceLabel: conf.sourceLabel || null, businesses: [] };
+
+  // pull the permission-sensitive fields (tax id, billing address, credit group) one
+  // account at a time so an error on a single account can't wipe the whole list
+  const enrichAccounts = async (accts) => {
+    if (!deep) return;
+    await mapLimit(arr(accts).filter((a) => a && a.account_id), 4, async (a) => {
+      const d = await g(`act_${a.account_id}`, ACCT_DEEP_FIELDS);
+      if (d && !d.error) Object.assign(a, d);
+    });
+  };
 
   const list = arr(bms);
   let i = 0;
   for (const bm of list) {
     i++;
     onProg(`Business ${i}/${list.length}: ${bm.name || bm.id}`, 8 + Math.round((i / Math.max(1, list.length)) * 78));
-    const [owned, client, pages, cpages, pixels, users, pending] = await Promise.all([
+    const [owned, client, pages, cpages, pixels, users, pending, credits, sysusers, igs] = await Promise.all([
       g(`${bm.id}/owned_ad_accounts`, ACCT_FIELDS), g(`${bm.id}/client_ad_accounts`, CLIENT_ACCT_FIELDS),
-      g(`${bm.id}/owned_pages`, 'id,name,verification_status'), g(`${bm.id}/client_pages`, 'id,name'),
-      g(`${bm.id}/adspixels`, 'id,name'), g(`${bm.id}/business_users`, 'id,name,email,role'),
-      g(`${bm.id}/pending_users`, 'id,email,role'),
+      g(`${bm.id}/owned_pages`, PAGE_FIELDS), g(`${bm.id}/client_pages`, CLIENT_PAGE_FIELDS),
+      g(`${bm.id}/adspixels`, PIXEL_FIELDS), g(`${bm.id}/business_users`, 'id,name,email,role,title,finance_permission,ip_permission,two_fac_status'),
+      g(`${bm.id}/pending_users`, 'id,email,role,invite_link'),
+      g(`${bm.id}/extendedcredits`, 'id,legal_entity_name,max_balance,balance,currency,credit_type,is_active,is_lira_all_credits'),
+      g(`${bm.id}/system_users`, 'id,name,role'),
+      g(`${bm.id}/instagram_accounts`, 'id,username,follower_count,profile_pic'),
     ]);
+    // deep-enrich owned accounts (tax id, billing address, credit invoice group)
+    await enrichAccounts(owned);
     // enrich each pixel with the ad accounts it is shared into (pixel ↔ account)
     for (const px of arr(pixels)) {
       const sh = await g(`${px.id}/shared_accounts`, 'account_id,name,currency');
       px.shared_accounts = arr(sh);
     }
-    out.businesses.push({ id: bm.id, name: bm.name, verification_status: bm.verification_status,
+    out.businesses.push({ ...bm,
       owned_ad_accounts: owned, client_ad_accounts: client, owned_pages: pages, client_pages: cpages,
-      adspixels: pixels, business_users: users, pending_users: pending });
+      adspixels: pixels, business_users: users, pending_users: pending,
+      extended_credits: credits, system_users: sysusers, instagram_accounts: igs });
   }
 
   // profile-level assets from /me/adaccounts. The `business{id,name}` field tells the hub
@@ -73,8 +108,9 @@ async function walk(session, conf, onProg = () => {}) {
   onProg('Reading personal assets', 90);
   const [meAcc, mePages] = await Promise.all([
     g('me/adaccounts', ACCT_FIELDS + ',business{id,name}'),
-    g('me/accounts', 'id,name,verification_status'),
+    g('me/accounts', PAGE_FIELDS),
   ]);
+  await enrichAccounts(meAcc);
   out.me_ad_accounts = arr(meAcc);
   out.me_pages = arr(mePages);
   return out;

@@ -38,6 +38,10 @@ const payMethod = (funding) => {
 };
 const payChip = (funding) => { const m = payMethod(funding);
   return m ? `<span class="badge b-muted" title="Payment method">${esc(m)}</span>` : ''; };
+// the full Facebook object we stored per asset (tax id, billing address, created_time,
+// extended credit, instagram, system users, …)
+const parseRaw = (s) => { if (!s) return null; try { return typeof s === 'string' ? JSON.parse(s) : s; } catch { return null; } };
+const titleCase = (s) => String(s || '').replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
 const fmtN = (n) => n >= 1e6 ? (n/1e6).toFixed(2)+'M' : n >= 1e3 ? (n/1e3).toFixed(1)+'K' : ''+(n ?? 0);
 const fmtDate = (i) => i ? new Date(i).toLocaleString() : '—';
 const fresh = (f) => `<span class="badge b-muted"><span class="dot ${f||'unknown'}"></span>${{fresh:'fresh',aging:'aging',stale:'stale'}[f]||'no data'}</span>`;
@@ -443,7 +447,15 @@ async function renderDetail(type, id) {
     add('Amount spent', money(e.amount_spent, e.currency)); add('Balance', money(e.balance, e.currency));
     add('Spend limit', money(e.spend_cap, e.currency)); add('Currency', e.currency && esc(e.currency));
     add('Timezone', e.timezone && esc(e.timezone));
-    if (e.funding) { try { const f = JSON.parse(e.funding); add('Funding', esc(f.display_string || f.type || '—')); } catch {} }
+    const rw = parseRaw(e.raw) || {};
+    const f = parseRaw(e.funding);
+    if (f) add('Payment method', `${esc(f.display_string || titleCase(f.type) || '—')}${f.type && f.display_string ? ` <span class="dim">(${esc(titleCase(f.type))})</span>` : ''}`);
+    add('Prepay account', rw.is_prepay_account === true ? 'Yes' : rw.is_prepay_account === false ? 'No' : '');
+    add('Tax ID', rw.tax_id && `<span class="mono">${esc(rw.tax_id)}</span>${rw.tax_id_status ? ` <span class="dim">${esc(titleCase(rw.tax_id_status))}</span>` : ''}`);
+    const addr = [rw.business_street, rw.business_street2, rw.business_city, rw.business_state, rw.business_zip, rw.business_country_code].filter(Boolean).map(esc).join(', ');
+    add('Billing address', addr);
+    add('Business name', rw.business_name && esc(rw.business_name));
+    add('Created', rw.created_time && fmtDate(rw.created_time));
   }
   if (type === 'business') add('Verification', verify(e.verification_status) || '—');
   if (type === 'page') add('Verification', verify(e.verification_status) || '—');
@@ -483,6 +495,27 @@ async function renderDetail(type, id) {
     html += sect('Pixels','pixel',r.assets.pixels,rowPixel);
     html += sect('People','person',r.assets.people,rowPerson);
   }
+  // BM billing + extras captured in raw (extended credit lines, Instagram, system users)
+  if (type === 'business') {
+    const rw = parseRaw(e.raw) || {};
+    const listOf = (v) => (v && Array.isArray(v.data)) ? v.data : (Array.isArray(v) ? v : []);
+    const credits = listOf(rw.extended_credits);
+    if (credits.length) html += `<div class="sectiontitle">💳 Extended credit <span class="count-pill">${credits.length}</span></div>
+      <div class="card"><table><tbody>${credits.map((c) => `<tr>
+        <td class="namecell"><span style="font-weight:600">${esc(c.legal_entity_name || 'Credit line')}</span> ${c.is_active ? '<span class="badge b-good">active</span>' : '<span class="badge b-muted">inactive</span>'}</td>
+        <td class="mono" title="Balance owed / max">${money(c.balance, c.currency)} <span class="dim">/ ${money(c.max_balance, c.currency)}</span></td>
+        <td class="dim">${esc(titleCase(c.credit_type || ''))}</td></tr>`).join('')}</tbody></table></div>`;
+    const igs = listOf(rw.instagram_accounts);
+    if (igs.length) html += `<div class="sectiontitle">Instagram accounts <span class="count-pill">${igs.length}</span></div>
+      <div class="card"><table><tbody>${igs.map((ig) => `<tr>
+        <td class="namecell"><span style="font-weight:600">@${esc(ig.username || ig.id)}</span></td>
+        <td class="mono">${ig.follower_count != null ? fmtN(ig.follower_count) + ' followers' : ''}</td></tr>`).join('')}</tbody></table></div>`;
+    const sus = listOf(rw.system_users);
+    if (sus.length) html += `<div class="sectiontitle">System users <span class="count-pill">${sus.length}</span></div>
+      <div class="card"><table><tbody>${sus.map((u) => `<tr>
+        <td class="namecell"><span style="font-weight:600">${esc(u.name || u.id)}</span></td>
+        <td>${u.role ? `<span class="badge b-accent">${esc(titleCase(u.role))}</span>` : ''}</td></tr>`).join('')}</tbody></table></div>`;
+  }
   // ad account -> pixels assigned to it
   if (type === 'ad_account') html += sect('Pixels assigned to this account','pixel',r.pixels,rowPixel);
   // pixel -> ad accounts it is shared into
@@ -512,6 +545,10 @@ async function renderDetail(type, id) {
       : '<div class="muted">No profile currently reaches this.</div>'}</div>`);
 
   html += `<div class="grid2" style="margin-top:16px">${twoCol.join('')}</div>`;
+  // every field Facebook returned for this asset, verbatim
+  const rawObj = parseRaw(e.raw);
+  if (rawObj) html += `<details class="coll" style="margin-top:16px"><summary>All fields (raw from Facebook)</summary>
+    <div class="coll-body"><pre class="rawjson">${esc(JSON.stringify(rawObj, null, 2))}</pre></div></details>`;
   $('#app').innerHTML = html;
   bindRowNav();
 }
