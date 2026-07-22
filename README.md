@@ -33,11 +33,21 @@ tab the settings queries never fire.
 ```
 MetaManager/
   README.md               this file
+  DEPLOY.md               how to host it on Render (free) for the whole team
   PROJECT-CONTEXT.md      the full story: decisions, history, what is tested
+  package.json            start/test scripts + the pg dependency (for hosting)
+  render.yaml             Render blueprint
   extractor.js            the original console version (kept as a reference)
   extension/              the browser extension (reads Facebook, sends to hub)
   hub/                    the server + database + dashboard
 ```
+
+## Database
+
+Local dev uses Node's built-in SQLite automatically (data in `hub/data/`, zero setup).
+Set `DATABASE_URL` to a Postgres connection string (e.g. a free Neon database) and the hub
+uses Postgres instead — this is how it persists and scales when hosted. Same code, both
+backends. See [DEPLOY.md](DEPLOY.md).
 
 ## The extension
 

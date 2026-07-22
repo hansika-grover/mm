@@ -1,16 +1,6 @@
 // MetaManager hub — dependency-free HTTP server (Node built-in http).
 // Serves the dashboard + the ingest/query API. No Express, no npm installs.
 'use strict';
-// --- Node version guard (must run before any node: imports) ---
-const _major = Number(process.versions.node.split('.')[0]);
-if (_major < 22) {
-  console.error(
-    `\n  MetaManager hub needs Node >= 22 (built-in node:sqlite / node:http). You are on ${process.version}.\n` +
-    `  If this is WSL, its Node is separate/older — either:\n` +
-    `    • run with your Windows Node v24 from PowerShell:  cd hub; node server.js\n` +
-    `    • or upgrade WSL Node:  nvm install 22 && nvm use 22\n`);
-  process.exit(1);
-}
 const http = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -18,7 +8,8 @@ const url = require('node:url');
 const store = require('./db');
 
 const PORT = Number(process.env.PORT || 5051);
-const HOST = process.env.HOST || '127.0.0.1';
+// bind all interfaces when running on a host (Render sets DATABASE_URL); loopback locally
+const HOST = process.env.HOST || (process.env.DATABASE_URL ? '0.0.0.0' : '127.0.0.1');
 const PUBLIC_DIR = path.join(__dirname, 'public');
 
 const MIME = {
@@ -71,40 +62,40 @@ const server = http.createServer(async (req, res) => {
   try {
     // ---- API ----
     if (pathname === '/api/summary' && req.method === 'GET')
-      return json(res, 200, store.summary());
+      return json(res, 200, await store.summary());
 
     if (pathname === '/api/tree' && req.method === 'GET')
-      return json(res, 200, { profiles: store.tree() });
+      return json(res, 200, { profiles: await store.tree() });
 
     if (pathname === '/api/search' && req.method === 'GET')
-      return json(res, 200, { results: store.search(query.q || '') });
+      return json(res, 200, { results: await store.search(query.q || '') });
 
     if (pathname === '/api/list' && req.method === 'GET')
-      return json(res, 200, { type: query.type || '', rows: store.list(query.type || '') });
+      return json(res, 200, { type: query.type || '', rows: await store.list(query.type || '') });
 
     if (pathname === '/api/changes' && req.method === 'GET')
-      return json(res, 200, { changes: store.changes(Number(query.limit) || 100,
+      return json(res, 200, { changes: await store.changes(Number(query.limit) || 100,
         query.type && query.id ? { type: query.type, id: query.id } : null) });
 
     if (pathname === '/api/sessions' && req.method === 'GET')
-      return json(res, 200, { sessions: store.sessions() });
+      return json(res, 200, { sessions: await store.sessions() });
 
     if (pathname === '/api/session-clear' && req.method === 'POST') {
       const raw = await readBody(req);
       let b = {}; try { b = raw ? JSON.parse(raw) : {}; } catch {}
-      return json(res, 200, store.clearSession(b.source_label || '*'));
+      return json(res, 200, await store.clearSession(b.source_label || '*'));
     }
 
     if (pathname === '/api/session-status' && req.method === 'POST') {
       const raw = await readBody(req);
       let s; try { s = JSON.parse(raw); } catch { return json(res, 400, { error: 'invalid JSON' }); }
-      try { return json(res, 200, store.reportSession(s)); }
+      try { return json(res, 200, await store.reportSession(s)); }
       catch (e) { return json(res, 400, { error: String(e.message || e) }); }
     }
 
     if (pathname === '/api/lookup' && req.method === 'GET') {
       if (!query.type || !query.id) return json(res, 400, { error: 'type and id required' });
-      const r = store.lookup(query.type, query.id);
+      const r = await store.lookup(query.type, query.id);
       return r ? json(res, 200, r) : json(res, 404, { error: 'not found' });
     }
 
@@ -116,7 +107,7 @@ const server = http.createServer(async (req, res) => {
       const dumps = Array.isArray(dump) ? dump : (Array.isArray(dump.dumps) ? dump.dumps : [dump]);
       const results = [];
       for (const d of dumps) {
-        try { results.push({ ok: true, ...store.ingest(d, { sourceLabel: d.sourceLabel }) }); }
+        try { results.push({ ok: true, ...(await store.ingest(d, { sourceLabel: d.sourceLabel })) }); }
         catch (e) { results.push({ ok: false, error: String(e.message || e) }); }
       }
       const ok = results.every((r) => r.ok);
@@ -124,7 +115,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (pathname === '/api/reset' && req.method === 'POST') {
-      store.reset();
+      await store.reset();
       return json(res, 200, { ok: true });
     }
 
@@ -137,8 +128,13 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
-server.listen(PORT, HOST, () => {
-  console.log(`\n  MetaManager hub  →  http://${HOST}:${PORT}`);
-  console.log(`  database   →  ${store.DB_PATH}`);
-  console.log(`  ingest     →  POST http://${HOST}:${PORT}/api/ingest  (asset-dump.json)\n`);
+store.init().then((info) => {
+  server.listen(PORT, HOST, () => {
+    console.log(`\n  MetaManager hub  →  http://${HOST}:${PORT}`);
+    console.log(`  database   →  ${info.kind}: ${store.DB_PATH}`);
+    console.log(`  ingest     →  POST http://${HOST}:${PORT}/api/ingest  (asset-dump.json)\n`);
+  });
+}).catch((e) => {
+  console.error('\n  failed to start MetaManager hub:', e.message || e, '\n');
+  process.exit(1);
 });

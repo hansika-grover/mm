@@ -1,11 +1,12 @@
 {
   "manifest_version": 3,
   "name": "MetaManager",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Reads your own Facebook Business assets from the logged-in session (proactive token walk, like fbacc.io) and sends them to the MetaManager hub. One click, any tab, no browsing. No registered app, no System User, no OAuth.",
-  "permissions": ["storage", "activeTab", "downloads", "tabs"],
+  "permissions": ["storage", "activeTab", "downloads", "tabs", "alarms"],
   "host_permissions": [
     "https://*.facebook.com/*",
+    "https://*.onrender.com/*",
     "http://127.0.0.1/*",
     "http://localhost/*"
   ],

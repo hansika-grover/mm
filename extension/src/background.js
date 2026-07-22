@@ -194,4 +194,30 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
   return true;
 });
 
-chrome.runtime.onInstalled.addListener(() => setBadge('', '#4c9ffe'));
+// ---- reliable auto-run: a periodic alarm + browser-startup wake ------------
+// onUpdated (above) covers "a FB tab just finished loading". The alarm covers the
+// rest: it re-runs every autoRunEveryMin even if no tab reloaded, and survives the
+// service worker being suspended (MV3 tears the worker down when idle; an alarm
+// wakes it back up). It only fires against a tab that actually holds a token, so it
+// never emits bogus "not logged in" noise from a plain feed tab.
+async function ensureAlarm() {
+  const conf = await cfg();
+  const mins = Math.max(1, Number(conf.autoRunEveryMin) || 10);
+  chrome.alarms.create('autorun', { periodInMinutes: mins });
+}
+chrome.alarms.onAlarm.addListener(async (a) => {
+  if (a.name !== 'autorun') return;
+  const conf = await cfg();
+  if (!conf.autoRun) return;
+  let tabs = [];
+  try { tabs = await chrome.tabs.query({ url: ['*://*.facebook.com/*'] }); } catch { return; }
+  // prefer a tab where the ad-manager token exists
+  const tab = tabs.find((t) => /business\.facebook\.com|\.facebook\.com\/adsmanager|\.facebook\.com\/latest/.test(t.url || ''));
+  if (tab) runExtractTab(tab.id);
+});
+chrome.runtime.onStartup.addListener(() => { setBadge('', '#4c9ffe'); ensureAlarm(); });
+chrome.runtime.onInstalled.addListener(() => { setBadge('', '#4c9ffe'); ensureAlarm(); });
+// re-arm the alarm whenever settings change (e.g. a new interval)
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === 'local' && (changes.autoRunEveryMin || changes.autoRun)) ensureAlarm();
+});

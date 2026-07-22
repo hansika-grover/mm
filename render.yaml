@@ -1,0 +1,19 @@
+# Render blueprint for the MetaManager hub (free tier).
+#
+# In Render: New ▸ Blueprint ▸ pick this repo. It creates the web service below.
+# You supply DATABASE_URL yourself (a free Neon Postgres connection string) so your
+# data persists for good — see DEPLOY.md. Neon's free tier does not expire; Render's
+# own free Postgres is deleted after 30 days, which is why it is not wired here.
+services:
+  - type: web
+    name: metamanager-hub
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /api/summary
+    envVars:
+      - key: DATABASE_URL
+        sync: false          # paste your Neon connection string in the Render dashboard
+      - key: NODE_VERSION
+        value: "22"

@@ -1,0 +1,19 @@
+{
+  "name": "metamanager-hub",
+  "version": "0.2.0",
+  "private": true,
+  "description": "Self-hosted dashboard for your team's Facebook Business assets across many profiles.",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "node hub/server.js",
+    "test": "node pgtest.js"
+  },
+  "dependencies": {
+    "pg": "^8.13.1"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.5.4"
+  }
+}

@@ -29,6 +29,15 @@ function money(minor, cur) {
   try { return new Intl.NumberFormat(undefined, { style:'currency', currency: cur || 'USD' }).format(v); }
   catch { return `${v.toFixed(2)} ${cur || ''}`.trim(); }
 }
+// payment method from funding_source_details JSON -> e.g. "Visa •4242"
+const payMethod = (funding) => {
+  if (!funding) return '';
+  try { const f = typeof funding === 'string' ? JSON.parse(funding) : funding;
+    return f.display_string || (f.type ? String(f.type).replace(/_/g, ' ').toLowerCase() : ''); }
+  catch { return ''; }
+};
+const payChip = (funding) => { const m = payMethod(funding);
+  return m ? `<span class="badge b-muted" title="Payment method">${esc(m)}</span>` : ''; };
 const fmtN = (n) => n >= 1e6 ? (n/1e6).toFixed(2)+'M' : n >= 1e3 ? (n/1e3).toFixed(1)+'K' : ''+(n ?? 0);
 const fmtDate = (i) => i ? new Date(i).toLocaleString() : '—';
 const fresh = (f) => `<span class="badge b-muted"><span class="dot ${f||'unknown'}"></span>${{fresh:'fresh',aging:'aging',stale:'stale'}[f]||'no data'}</span>`;
@@ -88,7 +97,7 @@ async function route() {
   try {
     if (view === 'overview') return await renderOverview();
     if (view === 'tree') return await renderTree();
-    if (view === 'list') return await renderList(parts[1]);
+    if (view === 'list') return await renderList(parts[1], parts[2]);
     if (view === 'detail') return await renderDetail(parts[1], parts[2]);
     return await renderOverview();
   } catch (e) { $('#app').innerHTML = `<div class="empty"><div class="big">🚫</div>${esc(e.message||e)}</div>`; }
@@ -241,11 +250,44 @@ async function renderOverview() {
   });
 }
 
-// ---- LIST (browsable category) --------------------------------------------
-async function renderList(type) {
+// collect the ids of a given asset type reachable by one profile (for drill-down filtering)
+function profileAssetIds(p, type) {
+  const ids = new Set();
+  const add = (a, k) => (a || []).forEach((x) => ids.add(String(x[k])));
+  if (type === 'business') { (p.businesses || []).forEach((b) => ids.add(String(b.bm_id))); return ids; }
+  const k = idKey[type];
+  for (const b of (p.businesses || [])) {
+    if (type === 'ad_account') add(b.ad_accounts, k);
+    else if (type === 'page') add(b.pages, k);
+    else if (type === 'pixel') add(b.pixels, k);
+    else if (type === 'person') add(b.people, k);
+  }
+  if (p.direct) {
+    if (type === 'ad_account') add(p.direct.ad_accounts, k);
+    else if (type === 'page') add(p.direct.pages, k);
+    else if (type === 'pixel') add(p.direct.pixels, k);
+  }
+  return ids;
+}
+
+// ---- LIST (browsable category, optionally scoped to one profile) -----------
+async function renderList(type, profileId) {
   if (!TYPE[type]) throw new Error('Unknown list: ' + type);
-  const { rows } = (await api('/api/list?type=' + type)) || { rows: [] };
-  crumbs([{ label:'Overview', hash:'#overview' }, { label: TYPE[type].plural }]);
+  let { rows } = (await api('/api/list?type=' + type)) || { rows: [] };
+  let profileName = '';
+  if (profileId) {
+    const data = (await api('/api/tree')) || { profiles: [] };
+    const p = (data.profiles || []).find((x) => x.fb_user_id === profileId);
+    if (p) {
+      profileName = p.name || profileId;
+      const ids = profileAssetIds(p, type);
+      rows = rows.filter((r) => ids.has(String(r[idKey[type]])));
+    }
+  }
+  crumbs(profileId
+    ? [{ label:'Overview', hash:'#overview' }, { label:'Profiles', hash:'#list/profile' },
+       { label: profileName, hash: '#detail/profile/' + encodeURIComponent(profileId) }, { label: TYPE[type].plural }]
+    : [{ label:'Overview', hash:'#overview' }, { label: TYPE[type].plural }]);
 
   const bmChips = (bms) => (bms||[]).slice(0,3).map(b =>
     `<span class="badge b-accent" data-h="${link('business',b.bm_id)}" style="cursor:pointer">${esc(b.name||b.bm_id)}${b.role?` · ${esc(b.role)}`:''}</span>`).join(' ')
@@ -253,12 +295,14 @@ async function renderList(type) {
 
   let head = '', body = '';
   if (type === 'ad_account') {
-    head = '<th>Ad account</th><th>Status</th><th>Spent</th><th>Balance</th><th>Limit</th><th>Pixels</th><th>Business Manager</th>';
+    head = '<th>Ad account</th><th>Status</th><th>Spent</th><th>Balance</th><th>Payment</th><th>Limit</th><th>Pixels</th><th>Business Manager</th>';
     body = rows.map(a => `<tr class="click" data-h="${link('ad_account',a.account_id)}">
       <td class="namecell"><span class="av" style="background:#7b9ef822;color:#a9c1fb">${abbr(a.name)}</span>
         <div><div style="font-weight:600">${esc(a.name||'—')}</div><div class="dim mono" style="font-size:11px">act_${esc(a.account_id)}</div></div></td>
       <td>${adStatus(a.account_status)}</td><td class="mono">${money(a.amount_spent,a.currency)}</td>
-      <td class="mono">${money(a.balance,a.currency)}</td><td class="mono">${money(a.spend_cap,a.currency)}</td>
+      <td class="mono">${money(a.balance,a.currency)}</td>
+      <td>${payChip(a.funding) || '<span class="muted">—</span>'}</td>
+      <td class="mono">${money(a.spend_cap,a.currency)}</td>
       <td>${a.pixel_count?`<span class="badge b-warn">${a.pixel_count} pixel${a.pixel_count>1?'s':''}</span>`:'<span class="muted">—</span>'}</td>
       <td>${bmChips(a.bms)}</td></tr>`).join('');
   } else if (type === 'page') {
@@ -294,7 +338,8 @@ async function renderList(type) {
   }
 
   $('#app').innerHTML = `
-    <div class="pagehead"><h1>${TYPE[type].plural}</h1><div class="sub">${rows.length} total · click a row for where it lives &amp; who can reach it.</div></div>
+    <div class="pagehead"><h1>${TYPE[type].plural}${profileName ? ` <span class="dim" style="font-weight:400">· ${esc(profileName)}</span>` : ''}</h1>
+      <div class="sub">${rows.length} ${profileName ? `reachable by this profile` : 'total'} · click a row for where it lives &amp; who can reach it.</div></div>
     <div class="card">${rows.length ? `<table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>` : '<div class="empty">Nothing here yet.</div>'}</div>`;
   bindRowNav();
 }
@@ -312,12 +357,16 @@ async function renderProfileDetail(id) {
   const allPages = [...p.businesses.flatMap((b) => b.pages), ...p.direct.pages];
   const allPixels = [...p.businesses.flatMap((b) => b.pixels), ...p.direct.pixels];
   const allPeople = p.businesses.flatMap((b) => b.people);
-  const stat = (n, l, tint) => `<div class="mstat"><div class="n" style="color:${tint}">${n}</div><div class="l">${l}</div></div>`;
+  // clickable tile -> that asset type, scoped to this profile
+  const stat = (n, l, tint, type) => `<a class="mstat click" href="#list/${type}/${encodeURIComponent(id)}"><div class="n" style="color:${tint}">${n}</div><div class="l">${l}</div></a>`;
 
-  // row builders
+  // row builders (spent + current balance + payment method)
   const rowAcct = (a) => `<tr class="click" data-h="${link('ad_account',a.account_id)}">
     <td class="namecell"><span class="type-tag t-ad_account">ACCT</span><span style="font-weight:600">${esc(a.name||'—')}</span> <span class="dim mono">act_${esc(a.account_id)}</span></td>
-    <td>${adStatus(a.account_status)}</td><td class="mono">${money(a.amount_spent,a.currency)}</td>
+    <td>${adStatus(a.account_status)}</td>
+    <td class="mono" title="Amount spent">${money(a.amount_spent,a.currency)}</td>
+    <td class="mono" title="Current balance"><span class="dim">bal</span> ${money(a.balance,a.currency)}</td>
+    <td title="Payment method">${payChip(a.funding)}</td>
     <td>${(a.pixels||[]).length?`<span class="badge b-warn">${a.pixels.length} pixel${a.pixels.length>1?'s':''}</span>`:''}</td></tr>`;
   const rowPage = (pg) => `<tr class="click" data-h="${link('page',pg.page_id)}">
     <td class="namecell"><span class="type-tag t-page">PAGE</span><span style="font-weight:600">${esc(pg.name||'—')}</span> <span class="dim mono">${esc(pg.page_id)}</span></td><td>${verify(pg.verification_status)}</td></tr>`;
@@ -365,11 +414,11 @@ async function renderProfileDetail(id) {
         <div><div class="k">Last synced</div><div class="v">${fmtDate(p.last_synced_at)}</div></div>
       </div></div>
     <div class="metrics" style="grid-template-columns:repeat(5,1fr)">
-      ${stat(p.businesses.length,'Business Managers','#b197fc')}
-      ${stat(uniq(allAccts,'account_id'),'Ad accounts','#7b9ef8')}
-      ${stat(uniq(allPages,'page_id'),'Pages','#6fcf97')}
-      ${stat(uniq(allPixels,'pixel_id'),'Pixels','#f2c94c')}
-      ${stat(uniq(allPeople,'person_id'),'People','#f096c8')}
+      ${stat(p.businesses.length,'Business Managers','#b197fc','business')}
+      ${stat(uniq(allAccts,'account_id'),'Ad accounts','#7b9ef8','ad_account')}
+      ${stat(uniq(allPages,'page_id'),'Pages','#6fcf97','page')}
+      ${stat(uniq(allPixels,'pixel_id'),'Pixels','#f2c94c','pixel')}
+      ${stat(uniq(allPeople,'person_id'),'People','#f096c8','person')}
     </div>
     <div class="sectiontitle">Business Managers <span class="count-pill">${p.businesses.length}</span></div>
     ${bmBlocks || '<div class="muted" style="padding:8px">No Business Managers.</div>'}
@@ -413,7 +462,11 @@ async function renderDetail(type, id) {
     <div class="card"><table><tbody>${items.map(row).join('')}</tbody></table></div>` : '';
   const rowAcct = (a) => `<tr class="click" data-h="${link('ad_account',a.account_id)}">
     <td class="namecell"><span class="type-tag t-ad_account">ACCT</span><span style="font-weight:600">${esc(a.name||'—')}</span> <span class="dim mono">act_${esc(a.account_id)}</span></td>
-    <td>${adStatus(a.account_status)}</td><td class="mono">${money(a.amount_spent,a.currency)}</td>${a.relation?`<td><span class="badge b-primary">${esc(a.relation)}</span></td>`:'<td></td>'}</tr>`;
+    <td>${adStatus(a.account_status)}</td>
+    <td class="mono" title="Amount spent">${money(a.amount_spent,a.currency)}</td>
+    <td class="mono" title="Current balance"><span class="dim">bal</span> ${money(a.balance,a.currency)}</td>
+    <td title="Payment method">${payChip(a.funding)}</td>
+    ${a.relation?`<td><span class="badge b-primary">${esc(a.relation)}</span></td>`:'<td></td>'}</tr>`;
   const rowPage = (p) => `<tr class="click" data-h="${link('page',p.page_id)}">
     <td class="namecell"><span class="type-tag t-page">PAGE</span><span style="font-weight:600">${esc(p.name||'—')}</span> <span class="dim mono">${esc(p.page_id)}</span></td>
     <td>${p.relation?`<span class="badge b-primary">${esc(p.relation)}</span>`:''} ${verify(p.verification_status)}</td></tr>`;
