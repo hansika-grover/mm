@@ -1,0 +1,50 @@
+{
+  "me": { "id": "100011112223334", "name": "Buyer One — Profile A" },
+  "fetchedAt": "2026-07-18T09:40:00.000Z",
+  "sourceLabel": "MachineA/adspower-p1",
+  "businesses": [
+    {
+      "id": "178900000000001",
+      "name": "Acme Media BM",
+      "verification_status": "verified",
+      "owned_ad_accounts": [
+        { "account_id": "500000001", "name": "Acme — US Prospecting", "account_status": 1, "balance": "0", "amount_spent": "1348211", "adtrust_dsl": "5000000", "currency": "USD", "funding_source_details": { "type": "CREDIT_CARD", "display_string": "Visa •4242" } },
+        { "account_id": "500000002", "name": "Acme — EU Retargeting", "account_status": 2, "disable_reason": "POLICY_VIOLATION", "balance": "12050", "amount_spent": "894000", "adtrust_dsl": "2500000", "currency": "EUR" }
+      ],
+      "client_ad_accounts": [
+        { "account_id": "500000009", "name": "Partner Shared Acct", "account_status": 1, "balance": "0", "amount_spent": "22000", "currency": "USD" }
+      ],
+      "owned_pages": [
+        { "id": "60900000000001", "name": "Acme Store", "verification_status": "not_verified" },
+        { "id": "60900000000002", "name": "Acme Blog" }
+      ],
+      "client_pages": [],
+      "adspixels": [
+        { "id": "70800000000001", "name": "Acme Global Pixel" }
+      ],
+      "business_users": [
+        { "id": "1000000001", "name": "Buyer One", "email": "buyer1@acme.co", "role": "ADMIN" },
+        { "id": "1000000002", "name": "Media Buyer Two", "email": "buyer2@acme.co", "role": "EMPLOYEE" }
+      ],
+      "pending_users": [
+        { "id": "1000000003", "email": "contractor@ext.io", "role": "EMPLOYEE" }
+      ]
+    },
+    {
+      "id": "178900000000002",
+      "name": "Solo Test BM",
+      "verification_status": "not_verified",
+      "owned_ad_accounts": [
+        { "account_id": "500000020", "name": "Test Account", "account_status": 1, "balance": "0", "amount_spent": "0", "currency": "USD" }
+      ],
+      "client_ad_accounts": [],
+      "owned_pages": [],
+      "client_pages": [],
+      "adspixels": [],
+      "business_users": [
+        { "id": "1000000001", "name": "Buyer One", "email": "buyer1@acme.co", "role": "ADMIN" }
+      ],
+      "pending_users": []
+    }
+  ]
+}

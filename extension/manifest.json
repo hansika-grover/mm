@@ -1,0 +1,32 @@
+{
+  "manifest_version": 3,
+  "name": "fbacc extractor",
+  "version": "0.1.0",
+  "description": "Reads your own Facebook Business assets from the logged-in session (proactive token walk, like fbacc.io) and sends them to the fbacc hub. One click, any tab, no browsing. No registered app, no System User, no OAuth.",
+  "permissions": ["storage", "activeTab", "downloads", "tabs"],
+  "host_permissions": [
+    "https://*.facebook.com/*",
+    "http://127.0.0.1/*",
+    "http://localhost/*"
+  ],
+  "background": { "service_worker": "src/background.js" },
+  "action": { "default_popup": "popup/popup.html", "default_title": "fbacc extractor" },
+  "options_page": "options/options.html",
+  "content_scripts": [
+    {
+      "matches": ["https://*.facebook.com/*"],
+      "js": ["src/content.js"],
+      "run_at": "document_start",
+      "all_frames": true,
+      "world": "ISOLATED"
+    },
+    {
+      "matches": ["https://*.facebook.com/*"],
+      "js": ["src/inject.js"],
+      "run_at": "document_start",
+      "all_frames": true,
+      "world": "MAIN"
+    }
+  ],
+  "icons": { "16": "icons/icon16.png", "48": "icons/icon48.png", "128": "icons/icon128.png" }
+}

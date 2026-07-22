@@ -1,0 +1,27 @@
+# Dependencies
+node_modules/
+
+# Local Claude settings
+.claude/settings.local.json
+
+# Runtime data — never commit real Facebook data or tokens
+*.db
+*.sqlite
+*.sqlite3
+hub/data/
+hub/*.db
+
+# Real asset dumps (synthetic samples in hub/samples/ are kept intentionally)
+asset-dump.json
+*.asset-dump.json
+!hub/samples/*.asset-dump.json
+
+# Secrets / env
+.env
+.env.*
+*.token
+
+# Logs / OS cruft
+*.log
+.DS_Store
+Thumbs.db
