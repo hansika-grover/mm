@@ -1,11 +1,11 @@
-// fbacc hub — dependency-free HTTP server (Node built-in http).
+// MetaManager hub — dependency-free HTTP server (Node built-in http).
 // Serves the dashboard + the ingest/query API. No Express, no npm installs.
 'use strict';
 // --- Node version guard (must run before any node: imports) ---
 const _major = Number(process.versions.node.split('.')[0]);
 if (_major < 22) {
   console.error(
-    `\n  fbacc hub needs Node >= 22 (built-in node:sqlite / node:http). You are on ${process.version}.\n` +
+    `\n  MetaManager hub needs Node >= 22 (built-in node:sqlite / node:http). You are on ${process.version}.\n` +
     `  If this is WSL, its Node is separate/older — either:\n` +
     `    • run with your Windows Node v24 from PowerShell:  cd hub; node server.js\n` +
     `    • or upgrade WSL Node:  nvm install 22 && nvm use 22\n`);
@@ -138,7 +138,7 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(PORT, HOST, () => {
-  console.log(`\n  fbacc hub  →  http://${HOST}:${PORT}`);
+  console.log(`\n  MetaManager hub  →  http://${HOST}:${PORT}`);
   console.log(`  database   →  ${store.DB_PATH}`);
   console.log(`  ingest     →  POST http://${HOST}:${PORT}/api/ingest  (asset-dump.json)\n`);
 });

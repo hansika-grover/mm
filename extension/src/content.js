@@ -1,4 +1,4 @@
-// fbacc extractor — ISOLATED-world content bridge.
+// MetaManager — ISOLATED-world content bridge.
 // Caches the session harvested by inject.js (MAIN world), and can also read the token
 // straight from the DOM itself (same technique as the original extractor.js) as a fallback.
 'use strict';

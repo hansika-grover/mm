@@ -1,4 +1,4 @@
-# fbacc Dashboard — Plain-English One-Pager
+# MetaManager Dashboard — Plain-English One-Pager
 
 **One line:** Mission control for all our Facebook ad accounts — one screen to see everything and
 manage everyone, instead of logging into 50 separate browsers.

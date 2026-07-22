@@ -1,4 +1,4 @@
-# fbacc hub — dashboard (Piece B)
+# MetaManager hub — dashboard (Piece B)
 
 Self-hosted hub that ingests the `asset-dump.json` produced by `extractor.js`, stores
 every asset (profiles, BMs, ad accounts, pages, pixels, people/access) in a database

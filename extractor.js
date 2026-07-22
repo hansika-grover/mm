@@ -1,4 +1,4 @@
-// fbacc reader — run in the console of a logged-in business.facebook.com tab.
+// MetaManager reader — run in the console of a logged-in business.facebook.com tab.
 // READ-ONLY. Reads the whole asset tree in one pass, downloads asset-dump.json.
 (async () => {
   const V = 'v19.0';

@@ -1,4 +1,4 @@
-# fbacc extractor — browser extension (proactive token walk)
+# MetaManager — browser extension (proactive token walk)
 
 The extraction engine as an MV3 browser extension that reads your **own** Facebook Business
 assets **the way fbacc.io actually does** — one click, from any Facebook tab, **no browsing

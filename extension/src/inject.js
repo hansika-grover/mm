@@ -1,4 +1,4 @@
-// fbacc extractor — MAIN-world session harvester.
+// MetaManager — MAIN-world session harvester.
 //
 // Reverse-engineered from how fbacc.io actually works (research report §2): it does NOT
 // wait for you to browse tabs. It reads the session material the Facebook web app already

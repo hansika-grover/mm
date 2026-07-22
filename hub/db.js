@@ -1,4 +1,4 @@
-// fbacc hub — database layer (Node built-in SQLite).
+// MetaManager hub — database layer (Node built-in SQLite).
 // Graph model: assets are NODES keyed on their FB global ID (stored once, deduped),
 // access/ownership are EDGES. This is what makes reverse lookup work and scales to
 // many profiles/machines later (N profiles seeing act_123 = N edges into 1 node).

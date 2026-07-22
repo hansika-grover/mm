@@ -1,6 +1,6 @@
-# fbacc Rebuild — Build Plan & Decisions
+# MetaManager — Build Plan & Decisions
 
-> Recorded 2026-07-14. Companion to `fbacc-rebuild-NOTES.md` + `fbacc-research-report.md`.
+> Recorded 2026-07-14. Companion to `metamanager-rebuild-NOTES.md` + `metamanager-research-report.md`.
 
 ## Locked decisions
 - **Target:** standalone hub + dashboard; integrate into the Admin CRM *only once it's proven 100% accurate.*
@@ -59,7 +59,7 @@ Select any asset(s) → see where they live and what connects, traversing edges 
 - Enabled purely because assets are keyed on FB global IDs + access stored as edges (not flat rows).
 
 ## Capability surface
-Full operation × asset matrix in `fbacc-research-report.md` §3. Walls are FB's own, not the tool's:
+Full operation × asset matrix in `metamanager-research-report.md` §3. Walls are FB's own, not the tool's:
 ad-account **ownership transfer** restricted (share access only); **creation caps**; **rate limits** (ban trigger).
 
 ## Environment finding (2026-07-14)

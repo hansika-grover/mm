@@ -1,6 +1,6 @@
 # fbacc.io — Deep Research Report & Capability Catalog
 
-> Compiled 2026-07-14. Companion to `fbacc-rebuild-NOTES.md`.
+> Compiled 2026-07-14. Companion to `metamanager-rebuild-NOTES.md`.
 > Method: 5-angle fan-out web research → 14 sources fetched → 64 claims extracted →
 > 25 verified by 3-vote adversarial verification (23 confirmed, 2 refuted).
 > Confidence tags: `[verified, N-0]` = adversarially confirmed; `[my knowledge]` = domain

@@ -1,4 +1,4 @@
-// fbacc extractor — background service worker.
+// MetaManager — background service worker.
 // Proactive walker (fbacc's method): given the page session token, it calls Facebook's
 // own read endpoints itself — no browsing — assembles the full tree (incl. profile-direct
 // assets + pixel↔account sharing), and POSTs it to the hub. Also: auto-runs when a Facebook

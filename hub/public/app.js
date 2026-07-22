@@ -1,5 +1,5 @@
 'use strict';
-// fbacc hub dashboard — vanilla SPA, hash-history routing (browser Back works).
+// MetaManager hub dashboard — vanilla SPA, hash-history routing (browser Back works).
 
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];

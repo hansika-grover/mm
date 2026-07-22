@@ -1,6 +1,6 @@
-# fbacc: project context and history
+# MetaManager: project context and history
 
-This is the full background on what fbacc is, why it is built the way it is, and how it got here.
+This is the full background on what MetaManager is, why it is built the way it is, and how it got here.
 Read this if you are picking the project up and want the reasoning, not just the code.
 
 ## What the project is

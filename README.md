@@ -1,4 +1,4 @@
-# fbacc
+# MetaManager
 
 A self-hosted dashboard for all the Facebook Business assets your team owns. It reads every
 profile's Business Managers, ad accounts, pages, pixels and people into one place, keeps the
@@ -31,7 +31,7 @@ tab the settings queries never fire.
 ## Repository layout
 
 ```
-fbacc.io/
+MetaManager/
   README.md               this file
   PROJECT-CONTEXT.md      the full story: decisions, history, what is tested
   extractor.js            the original console version (kept as a reference)

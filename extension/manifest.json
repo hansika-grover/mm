@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "fbacc extractor",
+  "name": "MetaManager",
   "version": "0.1.0",
-  "description": "Reads your own Facebook Business assets from the logged-in session (proactive token walk, like fbacc.io) and sends them to the fbacc hub. One click, any tab, no browsing. No registered app, no System User, no OAuth.",
+  "description": "Reads your own Facebook Business assets from the logged-in session (proactive token walk, like fbacc.io) and sends them to the MetaManager hub. One click, any tab, no browsing. No registered app, no System User, no OAuth.",
   "permissions": ["storage", "activeTab", "downloads", "tabs"],
   "host_permissions": [
     "https://*.facebook.com/*",
@@ -10,7 +10,7 @@
     "http://localhost/*"
   ],
   "background": { "service_worker": "src/background.js" },
-  "action": { "default_popup": "popup/popup.html", "default_title": "fbacc extractor" },
+  "action": { "default_popup": "popup/popup.html", "default_title": "MetaManager" },
   "options_page": "options/options.html",
   "content_scripts": [
     {
