@@ -59,6 +59,13 @@ function serveStatic(req, res, pathname) {
 
 const server = http.createServer(async (req, res) => {
   const { pathname, query } = url.parse(req.url, true);
+  // CORS: let the browser extension (and any hosted dashboard) call the API cross-origin.
+  // The extension's POST of asset dumps is a preflighted request, so answer OPTIONS too.
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'content-type, authorization');
+  res.setHeader('Access-Control-Max-Age', '86400');
+  if (req.method === 'OPTIONS') { res.writeHead(204); res.end(); return; }
   try {
     // ---- API ----
     if (pathname === '/api/summary' && req.method === 'GET')
