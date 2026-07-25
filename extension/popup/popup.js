@@ -58,6 +58,7 @@ $('#extract').addEventListener('click', async () => {
 });
 
 $('#refresh').addEventListener('click', refresh);
+$('#viewdata').addEventListener('click', () => chrome.tabs.create({ url: chrome.runtime.getURL('viewer/viewer.html') }));
 $('#opts').addEventListener('click', (e) => { e.preventDefault(); chrome.runtime.openOptionsPage(); });
 
 refresh();

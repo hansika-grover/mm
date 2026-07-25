@@ -13,8 +13,10 @@ async function load() {
 }
 
 $('#save').addEventListener('click', async () => {
+  let hubUrl = $('#hubUrl').value.trim() || DEFAULTS.hubUrl;
+  if (hubUrl && !/^https?:\/\//i.test(hubUrl)) hubUrl = 'https://' + hubUrl.replace(/^\/+/, '');
   const cfg = {
-    hubUrl: $('#hubUrl').value.trim() || DEFAULTS.hubUrl,
+    hubUrl,
     sourceLabel: $('#sourceLabel').value.trim(),
     autoSend: $('#autoSend').checked,
     autoRun: $('#autoRun').checked,

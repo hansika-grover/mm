@@ -22,7 +22,7 @@
     .ghost{background:transparent;border:1px solid var(--line);color:var(--txt)}
     .hint{color:var(--muted);font-size:12px;margin:8px 0 0}
     a{color:var(--accent)} .mono{font-family:ui-monospace,Consolas,monospace}
-    #msg{min-height:16px;color:var(--muted);font-size:12px;margin-top:8px}
+    #msg{min-height:16px;color:var(--muted);font-size:12px;margin-top:8px;overflow-wrap:anywhere;white-space:pre-wrap}
     #msg.err{color:#ff7b72} #msg.ok{color:#57d364}
     .prog{margin-top:12px}
     .prog .bar{height:7px;background:var(--line);border-radius:99px;overflow:hidden}
@@ -42,6 +42,7 @@
     </div>
 
     <button id="extract" class="primary">Extract &amp; send to hub</button>
+    <button id="viewdata" class="ghost">📊 View all data</button>
     <button id="refresh" class="ghost">Refresh session</button>
 
     <div id="prog" class="prog" hidden>

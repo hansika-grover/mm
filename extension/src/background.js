@@ -7,7 +7,13 @@
 
 const DEFAULTS = { hubUrl: 'http://127.0.0.1:5051/api/ingest', sourceLabel: '', autoSend: true,
   autoRun: true, autoRunEveryMin: 10, graphVersion: 'v19.0', deepScan: true };
-const cfg = async () => ({ ...DEFAULTS, ...(await chrome.storage.local.get(DEFAULTS)) });
+const cfg = async () => {
+  const c = { ...DEFAULTS, ...(await chrome.storage.local.get(DEFAULTS)) };
+  // a hub URL with no scheme (e.g. "host.onrender.com/api/ingest") would be treated as a
+  // RELATIVE path by fetch() and silently fail — normalize it to https://
+  if (c.hubUrl && !/^https?:\/\//i.test(c.hubUrl)) c.hubUrl = 'https://' + c.hubUrl.replace(/^\/+/, '');
+  return c;
+};
 const statusUrl = (hubUrl) => hubUrl.replace(/\/api\/ingest\/?$/, '/api/session-status');
 
 const state = { session: null, lastResult: null, lastError: null, lastSend: null, busy: false };
@@ -117,9 +123,25 @@ async function walk(session, conf, onProg = () => {}) {
 }
 
 async function sendToHub(dump, conf) {
-  const res = await fetch(conf.hubUrl, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(dump) });
-  const body = await res.json().catch(() => ({}));
-  if (!res.ok && res.status !== 207) throw new Error(`hub ${res.status}: ${JSON.stringify(body)}`);
+  const url = conf.hubUrl || '';
+  let res;
+  try {
+    res = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(dump) });
+  } catch (e) {
+    // fetch() rejects only on a network-level failure (no HTTP response reached us).
+    // Turn the useless "Failed to fetch" into something that names the URL + likely cause.
+    const raw = String((e && e.message) || e);
+    console.error('[MetaManager] hub POST failed (network):', url, raw);
+    throw new Error(`could not reach hub → POST ${url || '(no Hub URL set!)'} — ${raw}. `
+      + `Check: (1) Hub URL is correct & reachable${/127\.0\.0\.1|localhost/.test(url) ? ' — it is still LOCALHOST, set it to your Render URL in Settings' : ''}; `
+      + `(2) that host is in the extension's host_permissions AND you reloaded the extension after editing it; `
+      + `(3) no proxy / VPN / AdsPower is blocking the host.`);
+  }
+  let body = {}; try { body = await res.json(); } catch {}
+  if (!res.ok && res.status !== 207) {
+    console.error('[MetaManager] hub POST rejected:', res.status, url, body);
+    throw new Error(`hub responded HTTP ${res.status} → POST ${url} :: ${JSON.stringify(body).slice(0, 400)}`);
+  }
   return body;
 }
 async function reportStatus(conf, status, detail, session) {
@@ -172,6 +194,13 @@ async function runExtractTab(tabId) {
       setBadge('!', '#f85149'); return { ok: false, error: state.lastError, loggedOut: true };
     }
     const dump = await walk(session, conf, emitProgress);
+    // persist locally, keyed by profile id, so the in-extension viewer shows everything
+    // with no hub — multiple profiles extracted in this browser accumulate (like the hub).
+    try {
+      const { dumps = {} } = await chrome.storage.local.get('dumps');
+      if (dump && dump.me && dump.me.id) dumps[dump.me.id] = dump;
+      await chrome.storage.local.set({ dumps, lastDump: dump, lastDumpAt: Date.now() });
+    } catch {}
     const s = stats(dump);
     state.lastResult = { stats: s, at: new Date().toISOString() };
     if (conf.autoSend) {

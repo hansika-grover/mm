@@ -5,6 +5,20 @@ const http = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');
 const url = require('node:url');
+
+// Load a local .env file (KEY=VALUE per line) BEFORE requiring ./db, which reads
+// DATABASE_URL at import time. Lets you keep the cloud DB URL in a file instead of
+// juggling shell environment variables. No dependency.
+for (const p of [path.join(__dirname, '..', '.env'), path.join(process.cwd(), '.env')]) {
+  try {
+    for (const line of fs.readFileSync(p, 'utf8').split(/\r?\n/)) {
+      const m = line.match(/^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*?)\s*$/);
+      if (m && process.env[m[1]] === undefined) process.env[m[1]] = m[2].replace(/^(['"])(.*)\1$/, '$2');
+    }
+    break; // use the first .env found
+  } catch { /* no .env here — fine */ }
+}
+
 const store = require('./db');
 
 const PORT = Number(process.env.PORT || 5051);
