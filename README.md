@@ -33,6 +33,8 @@ tab the settings queries never fire.
 ```
 MetaManager/
   README.md               this file
+  HANDOVER.md             developer handover: architecture, ops, and what was tried and failed
+  CLAUDE.md               working context and conventions for anyone (or any AI) editing the code
   DEPLOY.md               how to host it on Render (free) for the whole team
   PROJECT-CONTEXT.md      the full story: decisions, history, what is tested
   package.json            start/test scripts + the pg dependency (for hosting)

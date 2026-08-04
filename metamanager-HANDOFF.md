@@ -1,4 +1,9 @@
-# MetaManager — SESSION HANDOFF (read this first)
+# MetaManager — SESSION HANDOFF (historical)
+
+> **Superseded.** This file describes the state *before* the build, when the dashboard was still
+> "next". Everything below has since been built. For the current handover — architecture, ops,
+> and the approaches that failed and what replaced them — read **[HANDOVER.md](HANDOVER.md)**.
+> Kept for the record of what was decided up front.
 
 New chat: read this file, then the 4 docs in this folder, then continue.
 
